@@ -1282,6 +1282,83 @@ static void test_default_api (void) {
     END_TEST();
 }
 
+// MARK: - Custom allocator test
+
+static int custom_malloc_count = 0;
+static int custom_calloc_count = 0;
+static int custom_free_count = 0;
+
+static void *counting_malloc (size_t size) { custom_malloc_count++; return malloc(size); }
+static void *counting_calloc (size_t count, size_t size) { custom_calloc_count++; return calloc(count, size); }
+static void  counting_free   (void *ptr) { custom_free_count++; free(ptr); }
+
+static void test_custom_allocator (void) {
+    printf("Testing custom allocator...\n\n");
+    START_TEST();
+
+    fractional_indexing_allocator alloc = {
+        counting_malloc,
+        counting_calloc,
+        counting_free
+    };
+    fractional_indexing_set_allocator(&alloc);
+    custom_malloc_count = 0;
+    custom_calloc_count = 0;
+    custom_free_count = 0;
+
+    // Generate a single key — should route through custom allocator
+    char *k = generate_key_between(NULL, NULL);
+    int allocs_single = custom_malloc_count + custom_calloc_count;
+    counting_free(k); // free through custom allocator
+    {
+        bool pass = (allocs_single > 0 && custom_free_count > 0);
+        if (pass) nsuccess++; else nfailure++;
+        printf("Test %03d: custom allocator single key (allocs=%d frees=%d)\t%s\n",
+               ++ncount, allocs_single, custom_free_count,
+               pass ? "PASS" : "ERROR");
+    }
+
+    // Batch generation
+    custom_malloc_count = 0;
+    custom_calloc_count = 0;
+    custom_free_count = 0;
+    char **keys = generate_n_keys_between(NULL, NULL, 10);
+    int alloc_before_free = custom_malloc_count + custom_calloc_count;
+    free_keys(keys, 10);
+    {
+        bool pass = (alloc_before_free > 0 && custom_free_count > 0);
+        if (pass) nsuccess++; else nfailure++;
+        printf("Test %03d: custom allocator batch (allocs=%d frees=%d)\t%s\n",
+               ++ncount, alloc_before_free, custom_free_count,
+               pass ? "PASS" : "ERROR");
+    }
+
+    // Verify results are correct even with custom allocator
+    {
+        char *r = generate_key_between("a0", "a1");
+        bool pass = (r && strcmp(r, "a0V") == 0);
+        if (pass) nsuccess++; else nfailure++;
+        printf("Test %03d: correct result with custom allocator => %s\t%s\n",
+               ++ncount, r ? r : "NULL", pass ? "PASS" : "ERROR");
+        free(r);
+    }
+
+    // Reset to default allocator
+    fractional_indexing_set_allocator(NULL);
+
+    // Verify still works after reset
+    {
+        char *r = generate_key_between("a0", "a1");
+        bool pass = (r && strcmp(r, "a0V") == 0);
+        if (pass) nsuccess++; else nfailure++;
+        printf("Test %03d: correct result after reset to default => %s\t%s\n",
+               ++ncount, r ? r : "NULL", pass ? "PASS" : "ERROR");
+        free(r);
+    }
+
+    END_TEST();
+}
+
 // MARK: - Main
 
 int main (int argc, const char * argv[]) {
@@ -1330,6 +1407,9 @@ int main (int argc, const char * argv[]) {
 
     // Default API
     test_default_api();
+
+    // Custom allocator
+    test_custom_allocator();
 
     // Grand total
     printf("========================================\n");

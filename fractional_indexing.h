@@ -10,6 +10,17 @@
 #define __FRACTIONAL_INDEXING__
 
 #include <stdbool.h>
+#include <stddef.h>
+
+// Custom allocator
+// Set before any library calls. If not set, stdlib malloc/calloc/free are used.
+typedef struct {
+    void *(*malloc)(size_t size);
+    void *(*calloc)(size_t count, size_t size);
+    void  (*free)(void *ptr);
+} fractional_indexing_allocator;
+
+void fractional_indexing_set_allocator (const fractional_indexing_allocator *alloc);
 
 // Midpoint (low-level)
 char *midpoint_base10 (const char *a, const char *b, char **error);

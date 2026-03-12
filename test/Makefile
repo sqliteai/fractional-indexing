@@ -1,6 +1,6 @@
 CC      ?= cc
 CFLAGS  ?= -O2 -Wall -Wextra
-SRC_DIR  = ../fractional_indexing
+SRC_DIR  = ..
 TARGET   = test_fractional_indexing
 
 $(TARGET): test.c $(SRC_DIR)/fractional_indexing.c $(SRC_DIR)/fractional_indexing.h

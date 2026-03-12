@@ -18,6 +18,41 @@
 #include <stdio.h>
 #include <math.h>
 
+// MARK: - Custom allocator -
+
+static void *default_malloc (size_t size)              { return malloc(size); }
+static void *default_calloc (size_t count, size_t size){ return calloc(count, size); }
+static void  default_free   (void *ptr)                { free(ptr); }
+
+static fractional_indexing_allocator fi_alloc = {
+    default_malloc,
+    default_calloc,
+    default_free
+};
+
+void fractional_indexing_set_allocator (const fractional_indexing_allocator *alloc) {
+    if (alloc) {
+        fi_alloc.malloc = alloc->malloc ? alloc->malloc : default_malloc;
+        fi_alloc.calloc = alloc->calloc ? alloc->calloc : default_calloc;
+        fi_alloc.free   = alloc->free   ? alloc->free   : default_free;
+    } else {
+        fi_alloc.malloc = default_malloc;
+        fi_alloc.calloc = default_calloc;
+        fi_alloc.free   = default_free;
+    }
+}
+
+#define FI_MALLOC(size)         fi_alloc.malloc(size)
+#define FI_CALLOC(count, size)  fi_alloc.calloc(count, size)
+#define FI_FREE(ptr)            fi_alloc.free(ptr)
+
+static char *fi_strdup (const char *s) {
+    size_t len = strlen(s) + 1;
+    char *d = FI_MALLOC(len);
+    if (d) memcpy(d, s, len);
+    return d;
+}
+
 #ifndef max
 #define max(a,b)             \
 ({                           \
@@ -62,7 +97,7 @@ inline static int index_of (const char *digits, size_t lenD, char c) {
 
 static char *concat_key (const char *prefix, int prefix_len, const char *suffix) {
     int suffix_len = (int)strlen(suffix);
-    char *result = malloc(prefix_len + suffix_len + 1);
+    char *result = FI_MALLOC(prefix_len + suffix_len + 1);
     if (!result) return NULL;
     memcpy(result, prefix, prefix_len);
     memcpy(result + prefix_len, suffix, suffix_len + 1);
@@ -100,7 +135,7 @@ static char *fractional_indexing_sanitycheck (const char *a, size_t *lenA, const
     if (lastA == zero || lastB == zero) {if (error) *error = "Error: trailing zero"; return NULL;}
 
     size_t bsize = max(_lenA, _lenB) + 1;
-    char *buffer = calloc(1, bsize + 1);
+    char *buffer = FI_CALLOC(1, bsize + 1);
     if (!buffer) {if (error) *error = "Not enough memory to allocate buffer"; return NULL;}
 
     return buffer;
@@ -172,7 +207,7 @@ static char *midpoint_alloc (const char *a, const char *b, const char *digits, s
     if (!a) a = "";
 
     size_t bsize = max(lenA, lenB) + 1;
-    char *buffer = calloc(1, bsize + 1);
+    char *buffer = FI_CALLOC(1, bsize + 1);
     if (!buffer) return NULL;
 
     int bindex = 0;
@@ -271,7 +306,7 @@ static char *increment_integer_internal (const char *x, const char *digits, int 
 
     if (carry) {
         if (head == 'Z') {
-            char *result = (char *)malloc(3);
+            char *result = (char *)FI_MALLOC(3);
             if (!result) return NULL;
             result[0] = 'a';
             result[1] = digits[0];
@@ -288,7 +323,7 @@ static char *increment_integer_internal (const char *x, const char *digits, int 
             digs[digsLen-1] = 0;
         }
 
-        char *result = (char *)malloc(xlen + 2);
+        char *result = (char *)FI_MALLOC(xlen + 2);
         if (!result) return NULL;
 
         result[0] = h;
@@ -297,7 +332,7 @@ static char *increment_integer_internal (const char *x, const char *digits, int 
     }
 
     // carry is false
-    char* result = (char *)malloc(xlen + 1);
+    char* result = (char *)FI_MALLOC(xlen + 1);
     if (!result) return NULL;
 
     result[0] = head;
@@ -331,7 +366,7 @@ static char *decrement_integer_internal (const char *x, const char *digits, int 
 
     if (borrow) {
         if (head == 'a') {
-            char *result = (char *)malloc(3);
+            char *result = (char *)FI_MALLOC(3);
             if (!result) return NULL;
             result[0] = 'Z';
             result[1] = digits[digitsLen-1];
@@ -348,7 +383,7 @@ static char *decrement_integer_internal (const char *x, const char *digits, int 
             digs[digsLen-1] = 0;
         }
 
-        char *result = (char *)malloc(xlen + 2);
+        char *result = (char *)FI_MALLOC(xlen + 2);
         if (!result) return NULL;
 
         result[0] = h;
@@ -357,7 +392,7 @@ static char *decrement_integer_internal (const char *x, const char *digits, int 
     }
 
     // borrow is false
-    char* result = (char *)malloc(xlen + 1);
+    char* result = (char *)FI_MALLOC(xlen + 1);
     if (!result) return NULL;
 
     result[0] = head;
@@ -388,7 +423,7 @@ static char *generate_key_between_internal (const char *a, const char *b, const 
     }
 
     if (a == NULL && b == NULL) {
-        return strdup(integer_zero);
+        return fi_strdup(integer_zero);
     }
 
     if (a == NULL) {
@@ -400,13 +435,13 @@ static char *generate_key_between_internal (const char *a, const char *b, const 
             char *mid = midpoint_alloc("", fb, digits, digitsLen);
             if (!mid) return NULL;
             char *result = concat_key(b, ibLen, mid);
-            free(mid);
+            FI_FREE(mid);
             return result;
         }
 
         // If b has a fractional part, integer part alone is between NULL and b
         if (*fb != '\0') {
-            char *result = malloc(ibLen + 1);
+            char *result = FI_MALLOC(ibLen + 1);
             if (!result) return NULL;
             memcpy(result, b, ibLen);
             result[ibLen] = '\0';
@@ -435,7 +470,7 @@ static char *generate_key_between_internal (const char *a, const char *b, const 
         char *mid = midpoint_alloc(fa, NULL, digits, digitsLen);
         if (!mid) return NULL;
         char *result = concat_key(a, iaLen, mid);
-        free(mid);
+        FI_FREE(mid);
         return result;
     }
 
@@ -450,7 +485,7 @@ static char *generate_key_between_internal (const char *a, const char *b, const 
         char *mid = midpoint_alloc(fa, fb, digits, digitsLen);
         if (!mid) return NULL;
         char *result = concat_key(a, iaLen, mid);
-        free(mid);
+        FI_FREE(mid);
         return result;
     }
 
@@ -465,13 +500,13 @@ static char *generate_key_between_internal (const char *a, const char *b, const 
     if (strcmp(i, b) < 0) {
         return i;
     }
-    free(i);
+    FI_FREE(i);
 
     // return ia + midpoint(fa, NULL)
     char *mid = midpoint_alloc(fa, NULL, digits, digitsLen);
     if (!mid) return NULL;
     char *result = concat_key(a, iaLen, mid);
-    free(mid);
+    FI_FREE(mid);
     return result;
 }
 
@@ -480,22 +515,22 @@ static char *generate_key_between_internal (const char *a, const char *b, const 
 static char **generate_n_keys_between_internal (const char *a, const char *b, int n, const char *integer_zero, const char *smallest_integer, const char *digits, int digitsLen, char **err) {
     if (n == 0) return NULL;
 
-    char **result = calloc(n, sizeof(char *));
+    char **result = FI_CALLOC(n, sizeof(char *));
     if (!result) return NULL;
 
     if (n == 1) {
         result[0] = generate_key_between_internal(a, b, integer_zero, smallest_integer, digits, digitsLen, err);
-        if (!result[0]) { free(result); return NULL; }
+        if (!result[0]) { FI_FREE(result); return NULL; }
         return result;
     }
 
     if (b == NULL) {
         char *c = generate_key_between_internal(a, b, integer_zero, smallest_integer, digits, digitsLen, err);
-        if (!c) { free(result); return NULL; }
+        if (!c) { FI_FREE(result); return NULL; }
         result[0] = c;
         for (int i = 1; i < n; i++) {
             c = generate_key_between_internal(result[i-1], b, integer_zero, smallest_integer, digits, digitsLen, err);
-            if (!c) { for (int j = 0; j < i; j++) free(result[j]); free(result); return NULL; }
+            if (!c) { for (int j = 0; j < i; j++) FI_FREE(result[j]); FI_FREE(result); return NULL; }
             result[i] = c;
         }
         return result;
@@ -503,11 +538,11 @@ static char **generate_n_keys_between_internal (const char *a, const char *b, in
 
     if (a == NULL) {
         char *c = generate_key_between_internal(a, b, integer_zero, smallest_integer, digits, digitsLen, err);
-        if (!c) { free(result); return NULL; }
+        if (!c) { FI_FREE(result); return NULL; }
         result[0] = c;
         for (int i = 1; i < n; i++) {
             c = generate_key_between_internal(a, result[i-1], integer_zero, smallest_integer, digits, digitsLen, err);
-            if (!c) { for (int j = 0; j < i; j++) free(result[j]); free(result); return NULL; }
+            if (!c) { for (int j = 0; j < i; j++) FI_FREE(result[j]); FI_FREE(result); return NULL; }
             result[i] = c;
         }
         // reverse to get ascending order
@@ -522,12 +557,12 @@ static char **generate_n_keys_between_internal (const char *a, const char *b, in
     // Both a and b non-null: divide and conquer
     int mid = n / 2;
     char *c = generate_key_between_internal(a, b, integer_zero, smallest_integer, digits, digitsLen, err);
-    if (!c) { free(result); return NULL; }
+    if (!c) { FI_FREE(result); return NULL; }
 
     char **left = NULL;
     if (mid > 0) {
         left = generate_n_keys_between_internal(a, c, mid, integer_zero, smallest_integer, digits, digitsLen, err);
-        if (!left) { free(c); free(result); return NULL; }
+        if (!left) { FI_FREE(c); FI_FREE(result); return NULL; }
     }
 
     int rightN = n - mid - 1;
@@ -535,8 +570,8 @@ static char **generate_n_keys_between_internal (const char *a, const char *b, in
     if (rightN > 0) {
         right = generate_n_keys_between_internal(c, b, rightN, integer_zero, smallest_integer, digits, digitsLen, err);
         if (!right) {
-            if (left) { for (int j = 0; j < mid; j++) free(left[j]); free(left); }
-            free(c); free(result); return NULL;
+            if (left) { for (int j = 0; j < mid; j++) FI_FREE(left[j]); FI_FREE(left); }
+            FI_FREE(c); FI_FREE(result); return NULL;
         }
     }
 
@@ -545,8 +580,8 @@ static char **generate_n_keys_between_internal (const char *a, const char *b, in
     result[idx++] = c;
     for (int i = 0; i < rightN; i++) result[idx++] = right[i];
 
-    if (left) free(left);
-    if (right) free(right);
+    if (left) FI_FREE(left);
+    if (right) FI_FREE(right);
 
     return result;
 }
@@ -645,8 +680,8 @@ char **generate_n_keys_between_custom (const char *a, const char *b, int n, cons
 
 void free_keys (char **keys, int n) {
     if (!keys) return;
-    for (int i = 0; i < n; i++) free(keys[i]);
-    free(keys);
+    for (int i = 0; i < n; i++) FI_FREE(keys[i]);
+    FI_FREE(keys);
 }
 
 // MARK: - Default API (base62)
