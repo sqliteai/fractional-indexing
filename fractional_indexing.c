@@ -87,9 +87,9 @@ static const char *ERR_CANNOT_INCREMENT = "cannot increment any more";
 // MARK: - Utilities -
 
 inline static int index_of (const char *digits, size_t lenD, char c) {
-    int index = 0;
+    size_t index = 0;
     while (index < lenD) {
-        if (digits[index] == c) return index;
+        if (digits[index] == c) return (int)index;
         ++index;
     }
     return -1;
@@ -148,7 +148,7 @@ static char *fractional_indexing_midpoint (const char *a, size_t lenA, const cha
         // Remove the longest common prefix. Pad 'a' with 0s as we go.
         // Note that we don't need to pad 'b' because it can't end before 'a'
         // while traversing the common prefix.
-        int n = 0;
+        size_t n = 0;
         while (1) {
             int aChar = (n >= lenA) ? zero : a[n];
             int bChar = (n >= lenB) ? zero : b[n];
@@ -161,7 +161,7 @@ static char *fractional_indexing_midpoint (const char *a, size_t lenA, const cha
             const char *ptrB = (lenB > n) ? b+n : "";
             lenA = strlen(ptrA);
             lenB = strlen(ptrB);
-            *bindex = *bindex + n;
+            *bindex = *bindex + (int)n;
             return fractional_indexing_midpoint(ptrA, lenA, ptrB, lenB, digits, lenD, buffer, bindex);
         }
     }

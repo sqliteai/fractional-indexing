@@ -181,6 +181,15 @@ static void test_midpoint_base10 (void) {
     TEST_BASE10("", "02", "01");
     TEST_BASE10("", "01", "005");
     TEST_BASE10("499", "5", "4995");
+    // Common-prefix traversal must compare lengths without signed truncation.
+    char lower[4098], upper[4098], expected[4098];
+    memset(lower, '1', 4096);
+    memcpy(upper, lower, 4096);
+    memcpy(expected, lower, 4096);
+    strcpy(lower + 4096, "2");
+    strcpy(upper + 4096, "4");
+    strcpy(expected + 4096, "3");
+    TEST_BASE10(lower, upper, expected);
 
     END_TEST();
 }
