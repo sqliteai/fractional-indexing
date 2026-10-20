@@ -262,10 +262,6 @@ To move an item to a new position, compute a key between its new neighbors and u
 - [Fractional Indexing](https://vlcn.io/blog/fractional-indexing) -- vlcn.io
 - [CRDT Fractional Indexing](https://madebyevan.com/algos/crdt-fractional-indexing/) -- Evan Wallace
 
-## License
-
-MIT License. See [LICENSE](LICENSE) file.
-
 ---
 
 ## Part of the SQLite AI Ecosystem
